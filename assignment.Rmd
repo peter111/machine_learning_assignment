@@ -1,0 +1,60 @@
+---
+title: "Practical Machine learning assignment"
+author: "peter111"
+date: "Sunday, November 22, 2015"
+output: html_document
+---
+
+#Introduction and data
+
+This is a brief description of my prediction algorithm of types of training, based on the data coming from accelerometers for 6 subjects, which is a part of project for Practical machine learning Coursera class. In the first chunk I downloaded data and caret package. 
+
+```{r, echo=TRUE}
+library(caret)
+train_data<-read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+final_test_data<-read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```
+
+In the next part I made quick explanatory analysis, where I noticed that most of the variables are factor variables and as well they have thousands of missing values. I deducted that explanatory power of these variables is small so I decided to subset only explanatory variables which are numeric and doesn't contain NA's. So my new dataset has 1 dependent variable and 48 predictors. I've separated this dataset into three datasets: train, test and validation:
+
+```{r, echo=T}
+a<-data.frame()
+for (i in 1:160) a<-rbind(a,cbind(names(train_data)[i],sum(is.na(train_data[,i]))))
+print(a)
+subs_train_data<-train_data[,c(7,37:49,60:68,84:86,102,113:124,151:160)]
+final_test_data<-final_test_data[,c(7,37:49,60:68,84:86,102,113:124,151:160)]
+inTrain<-createDataPartition(y=subs_train_data$classe,p=0.6,list=FALSE)
+training<-subs_train_data[inTrain,]
+temp<-subs_train_data[-inTrain,]
+inTest<-createDataPartition(y=temp$classe,p=0.5,list=FALSE)
+testing<-temp[inTest,]
+validating<-temp[-inTest,]
+```
+
+Now I am training boosting with trees algorithm on training dataset. I tried to run during preprocessing PCA analysis with 18 PCA components which accounted for 99% of variability, but prediction wasn't so good. To save time I am showing only final run of the algorithm.
+
+```{r,echo=TRUE}
+modFit<-train(training$classe~.,method="gbm",data=training,verbose=F)
+modFit$results
+```
+#Validation
+In this part I am going to compare expected errors for training, testing and validation dataset:
+```{r,echo=TRUE}
+train_pred<-predict(modFit)
+test_pred<-predict(modFit,testing)
+valid_pred<-predict(modFit,validating)
+train_table<-table(train_pred,training$classe)
+test_table<-table(test_pred,testing$classe)
+valid_table<-table(valid_pred,validating$classe)
+a1<-0
+a2<-0
+a3<-0
+for(i in 1:5) a1<-a1+train_table[i,i] 
+for(i in 1:5) a2<-a2+test_table[i,i] 
+for(i in 1:5) a3<-a3+valid_table[i,i] 
+train_acc<-a1/dim(training)[1]
+test_acc<-a2/dim(testing)[1]
+valid_acc<-a3/dim(validating)[1]
+```
+
+Not surprisingly an accuracy of training dataset is biggest: `r round(train_acc,3)*100` %, accuracy of testing and validating dataset are smaller but only by just a few tenths of percentage, test: `r round(test_acc,3)*100` % and validation: `r round(valid_acc,3)*100` %. Expected out of sample error rate is less than 2%: `r (1-round(test_acc,3))*100`% for testing and `r (1-round(valid_acc,3))*100` for validation dataset. With this accuracy I've decided to use this algorithm.
